@@ -17,10 +17,20 @@ export default {
 
   // Global CSS (https://go.nuxtjs.dev/config-css)
   css: [
+    'quill/dist/quill.core.css',
+    // for snow theme
+    'quill/dist/quill.snow.css',
+    // for bubble theme
+    'quill/dist/quill.bubble.css',
+    // Vue-Select Library css
+    "vue-select/src/scss/vue-select.scss",
+    // Custom CSS
+    '@assets/css/app.scss',
   ],
 
   // Plugins to run before rendering page (https://go.nuxtjs.dev/config-plugins)
   plugins: [
+    { src: '@/plugins/index', mode: 'client' },
   ],
 
   // Auto import components (https://go.nuxtjs.dev/config-components)
