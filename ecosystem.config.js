@@ -2,11 +2,10 @@ module.exports = {
   apps: [
     {
       name: 'Invoicious',
-      script: './start.js',
-      env: {
-        HOST: 'localhost',
-        PORT: 3000
-      }
+      exec_mode: 'cluster',
+      instances: 1, // or 'max'
+      script: './node_modules/nuxt/bin/nuxt.js',
+      args: 'start'
     }
   ]
 }
