@@ -41,6 +41,11 @@ export default Vue.extend({
       uniqueID: this._uid,
     };
   },
+  watch: {
+    data(val) {
+      this.$emit("updated", val);
+    },
+  },
   mounted() {
     setTimeout(() => {
       if (this.content) {

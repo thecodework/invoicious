@@ -119,11 +119,17 @@
               <div class="mt-2 w-full flex justify-between">
                 <div class="w-1/2 pr-2">
                   <small>Invoice From</small>
-                  <editor ref="invoiceFrom" :content="invoiceFrom" />
+                  <editor
+                    :content="invoiceFrom"
+                    @updated="invoiceDataUpdated('updateInvoiceFrom', $event)"
+                  />
                 </div>
                 <div class="w-1/2 pl-2">
                   <small>Invoice To</small>
-                  <editor ref="invoiceTo" :content="invoiceTo" />
+                  <editor
+                    :content="invoiceTo"
+                    @updated="invoiceDataUpdated('updateInvoiceTo', $event)"
+                  />
                 </div>
                 <!-- <div class="w-2/3">
 
@@ -214,7 +220,10 @@
               <div class="flex justify-between mt-4">
                 <div class="w-1/2">
                   <small>Note</small>
-                  <editor ref="invoiceNote" :content="invoiceNote" />
+                  <editor
+                    :content="invoiceNote"
+                    @updated="invoiceDataUpdated('updateInvoiceNote', $event)"
+                  />
                 </div>
                 <table class="w-1/3">
                   <tbody>
@@ -358,7 +367,6 @@
       pdf-format="a4"
       pdf-orientation="portrait"
       ref="html2Pdf"
-      @progress="onProgress($event)"
       @hasDownloaded="hasDownloaded($event)"
     >
       <section
@@ -472,31 +480,28 @@
 </template>
 
 <script lang="ts">
-import Vue from "vue";
+import { Component, Vue } from "nuxt-property-decorator";
 import { mapGetters } from "vuex";
 import Editor from "./../components/Editor.vue";
 
-export default Vue.extend({
+interface InvoiceItems {
+  id: number;
+  description: string;
+  quantity: number | null;
+  rate: number | null;
+}
+
+interface FileReaderEventTarget extends EventTarget {
+  result: string;
+}
+interface FileReaderEvent extends ProgressEvent {
+  target: FileReaderEventTarget;
+  getMessage(): ArrayLike<number>;
+}
+
+@Component({
   components: {
     Editor,
-  },
-  data() {
-    return {
-      logoExists: false,
-      invoiceCurrentDate: "",
-      invoiceDueDate: "",
-      invoiceItems: [
-        {
-          id: 1,
-          description: "",
-          quantity: "",
-          rate: "",
-        },
-      ],
-      filename: "",
-      previewing: false,
-      downloading: false,
-    };
   },
   computed: {
     ...mapGetters({
@@ -506,84 +511,113 @@ export default Vue.extend({
       invoiceTo: "invoiceTo",
       invoiceNote: "invoiceNote",
     }),
-    invoiceNumber: {
-      get() {
-        return this.$store.getters.invoiceNumber;
-      },
-      set(value) {
-        this.$store.commit("updateInvoiceNumber", value);
-      },
-    },
-    tax: {
-      get() {
-        return this.$store.getters.tax;
-      },
-      set(value) {
-        this.$store.commit("updateTax", value);
-      },
-    },
-    subtotal() {
-      let temp = 0;
-      this.invoiceItems.forEach((item) => {
-        temp += item.quantity * item.rate;
-      });
-      return temp;
-    },
-    total() {
-      return ((this.subtotal * this.tax) / 100 + this.subtotal).toFixed(2);
-    },
   },
-  methods: {
-    uploadLogo(): void {
-      if (this.$refs.logo.files[0]) {
-        var reader = new FileReader();
-        reader.onload = function (e) {
-          document
-            .getElementById("logo-preview")
-            .setAttribute("src", e.target.result);
+})
+export default class extends Vue {
+  invoiceItems: Array<InvoiceItems> = [
+    {
+      id: 1,
+      description: "",
+      quantity: null,
+      rate: null,
+    },
+  ];
+  logoExists: boolean = false;
+  invoiceCurrentDate: string = "";
+  invoiceDueDate: string = "";
+  filename: string = "";
+  previewing: boolean = false;
+  downloading: boolean = false;
 
-          document
-            .getElementById("logo-preview-pdf")
-            .setAttribute("src", e.target.result);
-        };
+  get invoiceNumber(): number {
+    return this.$store.getters.invoiceNumber;
+  }
+  set invoiceNumber(value) {
+    this.$store.commit("updateInvoiceNumber", value);
+  }
 
-        reader.readAsDataURL(this.$refs.logo.files[0]);
-        this.logoExists = true;
-      }
-    },
-    addNewItem(): void {
-      let currentInvoiceItemsLength = this.invoiceItems.length;
+  get tax(): number {
+    return this.$store.getters.tax;
+  }
+  set tax(value) {
+    this.$store.commit("updateTax", value);
+  }
 
-      this.invoiceItems.push({
-        id: currentInvoiceItemsLength + 1,
-        description: "",
-        quantity: "",
-        rate: "",
-      });
-    },
-    onProgress(value) {
-      // console.log(value);
-    },
-    hasDownloaded() {
-      this.previewing = false;
-      this.downloading = false;
-    },
-    previewPDF(): void {
-      this.previewing = true;
+  get subtotal(): number {
+    let temp = 0;
+    this.invoiceItems.forEach((item) => {
+      temp += item.quantity! * item.rate!;
+    });
+    return temp;
+  }
 
-      this.$store.commit("updateInvoiceFrom", this.$refs.invoiceFrom.data);
-      this.$store.commit("updateInvoiceTo", this.$refs.invoiceTo.data);
-      this.$store.commit("updateInvoiceNote", this.$refs.invoiceNote.data);
+  get total(): string {
+    return ((this.subtotal * this.tax) / 100 + this.subtotal).toFixed(2);
+  }
 
-      if (this.$refs.html2Pdf) {
-        this.$refs.html2Pdf.generatePdf();
-      }
-    },
-    downloadPDF(): void {
-      this.downloading = true;
-      this.$refs.html2Pdf.generatePdf();
-    },
-  },
+  /**
+   * Need to define computed property for html2pdf library.
+   * Issue: Property generatePdf does not exists on type Vue | Element | Vue[] | Element[]
+   * @see https://stackoverflow.com/a/52109899/3210356
+   */
+  get html2pdf(): Vue & { generatePdf: () => boolean } {
+    return this.$refs.html2Pdf as Vue & { generatePdf: () => boolean };
+  }
+
+  get logo(): Vue & { files: FileList } {
+    return this.$refs.logo as Vue & { files: FileList };
+  }
+
+  uploadLogo(): void {
+    if (this.logo.files[0]) {
+      var reader: any = new FileReader();
+      reader.onload = (e: FileReaderEvent) => {
+        let logoPreview: HTMLElement | null = document.getElementById(
+          "logo-preview"
+        );
+        let logoPreviewPDF: HTMLElement | null = document.getElementById(
+          "logo-preview-pdf"
+        );
+
+        if (!!logoPreview) {
+          logoPreview.setAttribute("src", e.target.result);
+        }
+
+        if (!!logoPreviewPDF) {
+          logoPreviewPDF.setAttribute("src", e.target.result);
+        }
+      };
+
+      reader.readAsDataURL(this.logo.files[0]);
+      this.logoExists = true;
+    }
+  }
+  addNewItem(): void {
+    let currentInvoiceItemsLength = this.invoiceItems.length;
+
+    this.invoiceItems.push({
+      id: currentInvoiceItemsLength + 1,
+      description: "",
+      quantity: null,
+      rate: null,
+    });
+  }
+  hasDownloaded() {
+    this.previewing = false;
+    this.downloading = false;
+  }
+  invoiceDataUpdated(type: string, data: string) {
+    this.$store.commit(type, data);
+  }
+  previewPDF(): void {
+    this.previewing = true;
+    this.html2pdf.generatePdf();
+  }
+  downloadPDF(): void {
+    this.downloading = true;
+    this.html2pdf.generatePdf();
+  }
+
   mounted() {
     if (this.$cookies.isKey("currency")) {
       this.$store.commit("updateCurrency", Vue.$cookies.get("currency"));
@@ -611,6 +645,6 @@ export default Vue.extend({
         Vue.$cookies.get("invoiceNumber")
       );
     }
-  },
-});
+  }
+}
 </script>
